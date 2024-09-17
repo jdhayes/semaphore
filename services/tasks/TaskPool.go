@@ -193,9 +193,12 @@ func (p *TaskPool) blocks(t *TaskRunner) bool {
 		return false
 	}
 
-	// Perhaps check if t.repository == '/' (path) then skip this check?
-	// This way we can allow concurrent tasks within same template.       
+	// Perhaps check if t.repository[0] == '/' (path) then skip this check?
+	// This way we can allow concurrent tasks within same template.
 	for _, r := range p.activeProj[t.Task.ProjectID] {
+		if t.repository[0] == '/' {
+			continue
+		}
 		if r.Task.Status.IsFinished() {
 			continue
 		}
