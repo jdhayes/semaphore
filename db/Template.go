@@ -12,19 +12,42 @@ const (
 	TemplateDeploy TemplateType = "deploy"
 )
 
+type TemplateApp string
+
+const (
+	AppAnsible    TemplateApp = "ansible"
+	AppTerraform  TemplateApp = "terraform"
+	AppTofu       TemplateApp = "tofu"
+	AppBash       TemplateApp = "bash"
+	AppPowerShell TemplateApp = "powershell"
+	AppPython     TemplateApp = "python"
+	AppPulumi     TemplateApp = "pulumi"
+)
+
+func (t TemplateApp) IsTerraform() bool {
+	return t == AppTerraform || t == AppTofu
+}
+
 type SurveyVarType string
 
 const (
-	SurveyVarStr TemplateType = ""
-	SurveyVarInt TemplateType = "int"
+	SurveyVarStr  TemplateType = ""
+	SurveyVarInt  TemplateType = "int"
+	SurveyVarEnum TemplateType = "enum"
 )
 
+type SurveyVarEnumValue struct {
+	Name  string `json:"name"`
+	Value string `json:"value"`
+}
+
 type SurveyVar struct {
-	Name        string        `json:"name"`
-	Title       string        `json:"title"`
-	Required    bool          `json:"required"`
-	Type        SurveyVarType `json:"type"`
-	Description string        `json:"description"`
+	Name        string               `json:"name"`
+	Title       string               `json:"title"`
+	Required    bool                 `json:"required"`
+	Type        SurveyVarType        `json:"type"`
+	Description string               `json:"description"`
+	Values      []SurveyVarEnumValue `json:"values"`
 }
 
 type TemplateFilter struct {
@@ -38,7 +61,7 @@ type Template struct {
 	ID int `db:"id" json:"id"`
 
 	ProjectID     int  `db:"project_id" json:"project_id"`
-	InventoryID   int  `db:"inventory_id" json:"inventory_id"`
+	InventoryID   *int `db:"inventory_id" json:"inventory_id"`
 	RepositoryID  int  `db:"repository_id" json:"repository_id"`
 	EnvironmentID *int `db:"environment_id" json:"environment_id"`
 
@@ -73,14 +96,25 @@ type Template struct {
 	SurveyVars     []SurveyVar `db:"-" json:"survey_vars"`
 
 	SuppressSuccessAlerts bool `db:"suppress_success_alerts" json:"suppress_success_alerts"`
+
+	App TemplateApp `db:"app" json:"app"`
+
+	Tasks int `db:"tasks" json:"tasks"`
 }
 
 func (tpl *Template) Validate() error {
+	switch tpl.App {
+	case AppAnsible:
+		if tpl.InventoryID == nil {
+			return &ValidationError{"template inventory can not be empty"}
+		}
+	}
+
 	if tpl.Name == "" {
 		return &ValidationError{"template name can not be empty"}
 	}
 
-	if tpl.Playbook == "" {
+	if !tpl.App.IsTerraform() && tpl.Playbook == "" {
 		return &ValidationError{"template playbook can not be empty"}
 	}
 
@@ -93,22 +127,6 @@ func (tpl *Template) Validate() error {
 	return nil
 }
 
-func FillTemplates(d Store, templates []Template) (err error) {
-	for i := range templates {
-		tpl := &templates[i]
-		var tasks []TaskWithTpl
-		tasks, err = d.GetTemplateTasks(tpl.ProjectID, tpl.ID, RetrieveQueryParams{Count: 1})
-		if err != nil {
-			return
-		}
-		if len(tasks) > 0 {
-			tpl.LastTask = &tasks[0]
-		}
-	}
-
-	return
-}
-
 func FillTemplate(d Store, template *Template) (err error) {
 	if template.VaultKeyID != nil {
 		template.VaultKey, err = d.GetAccessKey(template.ProjectID, *template.VaultKeyID)
@@ -118,10 +136,13 @@ func FillTemplate(d Store, template *Template) (err error) {
 		return
 	}
 
-	err = FillTemplates(d, []Template{*template})
-
+	var tasks []TaskWithTpl
+	tasks, err = d.GetTemplateTasks(template.ProjectID, template.ID, RetrieveQueryParams{Count: 1})
 	if err != nil {
 		return
+	}
+	if len(tasks) > 0 {
+		template.LastTask = &tasks[0]
 	}
 
 	if template.SurveyVarsJSON != nil {

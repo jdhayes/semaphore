@@ -6,13 +6,25 @@ import App from './App.vue';
 import router from './router';
 import vuetify from './plugins/vuetify';
 import './assets/scss/main.scss';
+import i18n from './plugins/i18';
 
 const convert = new Convert();
 
 axios.defaults.baseURL = document.baseURI;
 Vue.config.productionTip = false;
 
-Vue.filter('formatDate', (value) => (value ? moment(String(value)).fromNow() : '—'));
+Vue.filter('formatDate', (value) => {
+  if (!value) {
+    return '—';
+  }
+  const date = moment(value);
+  const now = moment();
+
+  if (now.isSame(date, 'day')) {
+    return `${date.fromNow()} (${date.format('LT')})`; // Display only time if today
+  }
+  return date.format('L LT'); // Display only date otherwise
+});
 Vue.filter('formatTime', (value) => (value ? moment(String(value)).format('LTS') : '—'));
 Vue.filter('formatLog', (value) => (value ? convert.toHtml(String(value)) : value));
 
@@ -51,5 +63,6 @@ Vue.filter('formatMilliseconds', (value) => {
 new Vue({
   router,
   vuetify,
+  i18n,
   render: (h) => h(App),
 }).$mount('#app');

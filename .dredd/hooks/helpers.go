@@ -3,16 +3,17 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"os"
+	"time"
+
 	"github.com/ansible-semaphore/semaphore/db"
 	"github.com/ansible-semaphore/semaphore/db/bolt"
 	"github.com/ansible-semaphore/semaphore/db/factory"
 	"github.com/ansible-semaphore/semaphore/db/sql"
+	"github.com/ansible-semaphore/semaphore/pkg/random"
 	"github.com/ansible-semaphore/semaphore/util"
 	"github.com/go-gorp/gorp/v3"
 	"github.com/snikch/goodman/transaction"
-	"math/rand"
-	"os"
-	"time"
 )
 
 // Test Runner User
@@ -59,6 +60,9 @@ func truncateAll() {
 		"project__user",
 		"user",
 		"project__view",
+		"project__integration",
+		"project__integration_extract_value",
+		"project__integration_matcher",
 	}
 
 	switch store.(type) {
@@ -107,7 +111,7 @@ func addUserProjectRelation(pid int, user int) {
 	_, err := store.CreateProjectUser(db.ProjectUser{
 		ProjectID: pid,
 		UserID:    user,
-		Admin:     true,
+		Role:      db.ProjectOwner,
 	})
 	if err != nil {
 		panic(err)
@@ -207,12 +211,12 @@ func addSchedule() *db.Schedule {
 func addTask() *db.Task {
 	t := db.Task{
 		ProjectID:  userProject.ID,
-		TemplateID: int(templateID),
+		TemplateID: templateID,
 		Status:     "testing",
 		UserID:     &userPathTestUser.ID,
 		Created:    db.GetParsedTime(time.Now()),
 	}
-	t, err := store.CreateTask(t)
+	t, err := store.CreateTask(t, 0)
 	if err != nil {
 		fmt.Println("error during insertion of task:")
 		if j, err := json.Marshal(t); err == nil {
@@ -223,6 +227,54 @@ func addTask() *db.Task {
 		panic(err)
 	}
 	return &t
+}
+
+func addIntegration() *db.Integration {
+	integration, err := store.CreateIntegration(db.Integration{
+		ProjectID:  userProject.ID,
+		Name:       "Test Integration",
+		TemplateID: templateID,
+	})
+	if err != nil {
+		panic(err)
+	}
+
+	return &integration
+}
+
+func addIntegrationExtractValue() *db.IntegrationExtractValue {
+	integrationextractvalue, err := store.CreateIntegrationExtractValue(userProject.ID, db.IntegrationExtractValue{
+		Name:          "Value",
+		IntegrationID: integrationID,
+		ValueSource:   db.IntegrationExtractBodyValue,
+		BodyDataType:  db.IntegrationBodyDataJSON,
+		Key:           "key",
+		Variable:      "var",
+	})
+
+	if err != nil {
+		panic(err)
+	}
+
+	return &integrationextractvalue
+}
+
+func addIntegrationMatcher() *db.IntegrationMatcher {
+	integrationmatch, err := store.CreateIntegrationMatcher(userProject.ID, db.IntegrationMatcher{
+		Name:          "matcher",
+		IntegrationID: integrationID,
+		MatchType:     "body",
+		Method:        "equals",
+		BodyDataType:  "json",
+		Key:           "key",
+		Value:         "value",
+	})
+
+	if err != nil {
+		panic(err)
+	}
+
+	return &integrationmatch
 }
 
 // Token Handling
@@ -239,24 +291,13 @@ func addToken(tok string, user int) {
 }
 
 // HELPERS
-var r *rand.Rand
 var randSetup = false
 
 func getUUID() string {
 	if !randSetup {
-		r = rand.New(rand.NewSource(time.Now().UnixNano()))
 		randSetup = true
 	}
-	return randomString(8)
-}
-func randomString(strlen int) string {
-	const chars = "abcdefghijklmnopqrstuvwxyz0123456789"
-	result := ""
-	for i := 0; i < strlen; i++ {
-		index := r.Intn(len(chars))
-		result += chars[index : index+1]
-	}
-	return result
+	return random.String(8)
 }
 
 func loadConfig() {

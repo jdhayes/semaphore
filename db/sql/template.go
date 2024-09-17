@@ -2,8 +2,9 @@ package sql
 
 import (
 	"database/sql"
+
+	"github.com/Masterminds/squirrel"
 	"github.com/ansible-semaphore/semaphore/db"
-	"github.com/masterminds/squirrel"
 )
 
 func (d *SqlDb) CreateTemplate(template db.Template) (newTemplate db.Template, err error) {
@@ -17,8 +18,8 @@ func (d *SqlDb) CreateTemplate(template db.Template) (newTemplate db.Template, e
 		"id",
 		"insert into project__template (project_id, inventory_id, repository_id, environment_id, "+
 			"name, playbook, arguments, allow_override_args_in_task, description, vault_key_id, `type`, start_version,"+
-			"build_template_id, view_id, autorun, survey_vars, suppress_success_alerts)"+
-			"values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+			"build_template_id, view_id, autorun, survey_vars, suppress_success_alerts, app)"+
+			"values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
 		template.ProjectID,
 		template.InventoryID,
 		template.RepositoryID,
@@ -35,7 +36,8 @@ func (d *SqlDb) CreateTemplate(template db.Template) (newTemplate db.Template, e
 		template.ViewID,
 		template.Autorun,
 		db.ObjectToJSON(template.SurveyVars),
-		template.SuppressSuccessAlerts)
+		template.SuppressSuccessAlerts,
+		template.App)
 
 	if err != nil {
 		return
@@ -76,7 +78,8 @@ func (d *SqlDb) UpdateTemplate(template db.Template) error {
 		"view_id=?, "+
 		"autorun=?, "+
 		"survey_vars=?, "+
-		"suppress_success_alerts=? "+
+		"suppress_success_alerts=?, "+
+		"app=? "+
 		"where id=? and project_id=?",
 		template.InventoryID,
 		template.RepositoryID,
@@ -94,6 +97,7 @@ func (d *SqlDb) UpdateTemplate(template db.Template) error {
 		template.Autorun,
 		db.ObjectToJSON(template.SurveyVars),
 		template.SuppressSuccessAlerts,
+		template.App,
 		template.ID,
 		template.ProjectID,
 	)
@@ -101,6 +105,14 @@ func (d *SqlDb) UpdateTemplate(template db.Template) error {
 }
 
 func (d *SqlDb) GetTemplates(projectID int, filter db.TemplateFilter, params db.RetrieveQueryParams) (templates []db.Template, err error) {
+
+	templates = []db.Template{}
+
+	type templateWithLastTask struct {
+		db.Template
+		LastTaskID *int `db:"last_task_id"`
+	}
+
 	q := squirrel.Select("pt.id",
 		"pt.project_id",
 		"pt.inventory_id",
@@ -111,8 +123,15 @@ func (d *SqlDb) GetTemplates(projectID int, filter db.TemplateFilter, params db.
 		"pt.arguments",
 		"pt.allow_override_args_in_task",
 		"pt.vault_key_id",
+		"pt.build_template_id",
+		"pt.start_version",
 		"pt.view_id",
-		"pt.`type`").
+		"pt.`app`",
+		"pt.survey_vars",
+		"pt.start_version",
+		"pt.`type`",
+		"pt.`tasks`",
+		"(SELECT `id` FROM `task` WHERE template_id = pt.id ORDER BY `id` DESC LIMIT 1) last_task_id").
 		From("project__template pt")
 
 	if filter.ViewID != nil {
@@ -158,13 +177,47 @@ func (d *SqlDb) GetTemplates(projectID int, filter db.TemplateFilter, params db.
 		return
 	}
 
-	_, err = d.selectAll(&templates, query, args...)
+	var tpls []templateWithLastTask
+
+	_, err = d.selectAll(&tpls, query, args...)
 
 	if err != nil {
 		return
 	}
 
-	err = db.FillTemplates(d, templates)
+	taskIDs := make([]int, 0)
+
+	for _, tpl := range tpls {
+		if tpl.LastTaskID != nil {
+			taskIDs = append(taskIDs, *tpl.LastTaskID)
+		}
+	}
+
+	var tasks []db.TaskWithTpl
+	err = d.getTasks(projectID, nil, taskIDs, db.RetrieveQueryParams{}, &tasks)
+
+	if err != nil {
+		return
+	}
+
+	for _, tpl := range tpls {
+		template := tpl.Template
+
+		if tpl.LastTaskID != nil {
+			for _, tsk := range tasks {
+				if tsk.ID == *tpl.LastTaskID {
+					err = tsk.Fill(d)
+					if err != nil {
+						return
+					}
+					template.LastTask = &tsk
+					break
+				}
+			}
+		}
+
+		templates = append(templates, template)
+	}
 
 	return
 }

@@ -30,106 +30,71 @@
     <v-select
       v-if="template.type === 'deploy'"
       v-model="item.build_task_id"
-      label="Build Version"
+      :label="$t('buildVersion')"
       :items="buildTasks"
       item-value="id"
       :item-text="(itm) => getTaskMessage(itm)"
-      :rules="[v => !!v || 'Build Version is required']"
+      :rules="[v => !!v || $t('build_version_required')]"
       required
       :disabled="formSaving"
     />
 
     <v-text-field
       v-model="item.message"
-      label="Message (Optional)"
+      :label="$t('messageOptional')"
       :disabled="formSaving"
     />
 
-    <v-text-field
-      v-for="(v) in template.survey_vars || []"
-      :key="v.name"
-      :label="v.title"
-      :hint="v.description"
-      v-model="editedEnvironment[v.name]"
-      :required="v.required"
-      :rules="[
-          val => !v.required || !!val || v.title + ' is required',
-          val => !val || v.type !== 'int' || /^\d+$/.test(val) || v.title + ' must be integer',
+    <div v-for="(v) in template.survey_vars || []" :key="v.name">
+
+      <v-text-field
+        v-if="v.type === 'secret'"
+        :label="v.title"
+        :hint="v.description"
+        v-model="editedSecretEnvironment[v.name]"
+        :required="v.required"
+        type="password"
+        :rules="[
+            val => !v.required || !!val || v.title + $t('isRequired'),
+          ]"
+      />
+
+      <v-select
+        clearable
+        v-else-if="v.type === 'enum'"
+        :label="v.title + (v.required ? ' *' : '')"
+        :hint="v.description"
+        v-model="editedEnvironment[v.name]"
+        :required="v.required"
+        :rules="[
+          val => !v.required || val != null || v.title + ' ' + $t('isRequired')
         ]"
-    />
+        :items="v.values"
+        item-text="name"
+        item-value="value"
+      />
 
-    <v-row no-gutters class="mt-6">
-      <v-col cols="12" sm="6">
-        <v-checkbox class="mt-0" v-model="item.debug">
-          <template v-slot:label>
-            <div class="text-no-wrap">Debug <code>--vvvv</code></div>
-          </template>
-        </v-checkbox>
-      </v-col>
-      <v-col cols="12" sm="6">
-        <v-checkbox class="mt-0" v-model="item.dry_run">
-          <template v-slot:label>
-            <div class="text-no-wrap">Dry Run <code>--check</code></div>
-          </template>
-        </v-checkbox>
-      </v-col>
-      <v-col cols="12" sm="6">
-        <v-checkbox class="mt-0" v-model="item.diff">
-          <template v-slot:label>
-            <div class="text-no-wrap">Diff <code>--diff</code></div>
-          </template>
-        </v-checkbox>
-      </v-col>
-    </v-row>
-
-    <div class="mt-4" v-if="!advancedOptions">
-      <a @click="advancedOptions = true">
-        Advanced
-        <v-icon style="transform: translateY(-1px)">mdi-chevron-right</v-icon>
-      </a>
+      <v-text-field
+        v-else
+        :label="v.title + (v.required ? ' *' : '')"
+        :hint="v.description"
+        v-model="editedEnvironment[v.name]"
+        :required="v.required"
+        :rules="[
+          val => !v.required || !!val || v.title + ' ' + $t('isRequired'),
+          val => !val || v.type !== 'int' || /^\d+$/.test(val) ||
+          v.title + ' ' + $t('mustBeInteger'),
+        ]"
+      />
     </div>
 
-    <div class="mt-4" v-else>
-      <a @click="advancedOptions = false">
-        Hide
-        <v-icon style="transform: translateY(-1px)">mdi-chevron-up</v-icon>
-      </a>
-    </div>
+    <TaskParamsForm v-if="template.app === 'ansible'" v-model="item" :app="template.app" />
+    <TaskParamsForm v-else v-model="item.params" :app="template.app" />
 
-    <v-alert
-      v-if="advancedOptions && !template.allow_override_args_in_task"
-      color="info"
-      dense
-      text
-      class="mb-2"
-    >
-      Please allow overriding CLI argument in Task Template settings<br>
-      <div style="position: relative; margin-top: 10px;">
-        <video
-          autoplay
-          muted
-          style="width: 100%; border-radius: 4px;"
-        >
-          <source
-            src="/allow-override-cli-args-in-task.mp4"
-            type="video/mp4"/>
-        </video>
-      </div>
-    </v-alert>
-
-    <codemirror
-      class="mt-4"
-      v-if="advancedOptions && template.allow_override_args_in_task"
-      :style="{ border: '1px solid lightgray' }"
-      v-model="item.arguments"
-      :options="cmOptions"
-      placeholder='CLI Args (JSON array). Example:
-[
-  "-i",
-  "@myinventory.sh",
-  "--private-key=/there/id_rsa",
-  "-vvvv"
-]'
+    <ArgsPicker
+      v-if="template.allow_override_args_in_task"
+      :vars="args"
+      @change="setArgs"
     />
 
   </v-form>
@@ -139,11 +104,13 @@
 
 import ItemFormBase from '@/components/ItemFormBase';
 import axios from 'axios';
-import { codemirror } from 'vue-codemirror';
+// import { codemirror } from 'vue-codemirror';
 import 'codemirror/lib/codemirror.css';
 import 'codemirror/mode/vue/vue.js';
 import 'codemirror/addon/lint/json-lint.js';
 import 'codemirror/addon/display/placeholder.js';
+import TaskParamsForm from '@/components/TaskParamsForm.vue';
+import ArgsPicker from '@/components/ArgsPicker.vue';
 
 export default {
   mixins: [ItemFormBase],
@@ -152,7 +119,9 @@ export default {
     sourceTask: Object,
   },
   components: {
-    codemirror,
+    ArgsPicker,
+    TaskParamsForm,
+    // codemirror,
   },
   data() {
     return {
@@ -160,6 +129,7 @@ export default {
       buildTasks: null,
       commitAvailable: null,
       editedEnvironment: null,
+      editedSecretEnvironment: null,
       cmOptions: {
         tabSize: 2,
         mode: 'application/json',
@@ -168,9 +138,15 @@ export default {
         lint: true,
         indentWithTabs: false,
       },
-      advancedOptions: false,
+      // advancedOptions: false,
     };
   },
+  computed: {
+    args() {
+      return JSON.parse(this.item.arguments || '[]');
+    },
+  },
+
   watch: {
     needReset(val) {
       if (val) {
@@ -192,7 +168,12 @@ export default {
       }
     },
   },
+
   methods: {
+    setArgs(args) {
+      this.item.arguments = JSON.stringify(args || []);
+    },
+
     getTaskMessage(task) {
       let buildTask = task;
 
@@ -219,6 +200,7 @@ export default {
       });
 
       this.editedEnvironment = JSON.parse(v.environment || '{}');
+      this.editedSecretEnvironment = JSON.parse(v.secret || '{}');
       this.commitAvailable = v.commit_hash != null;
     },
 
@@ -230,6 +212,7 @@ export default {
 
     beforeSave() {
       this.item.environment = JSON.stringify(this.editedEnvironment);
+      this.item.secret = JSON.stringify(this.editedSecretEnvironment);
     },
 
     async afterLoadData() {
@@ -237,7 +220,11 @@ export default {
 
       this.item.template_id = this.templateId;
 
-      this.advancedOptions = this.item.arguments != null;
+      if (!this.item.params) {
+        this.item.params = {};
+      }
+
+      // this.advancedOptions = this.item.arguments != null;
 
       this.template = (await axios({
         keys: 'get',

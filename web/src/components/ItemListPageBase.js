@@ -5,6 +5,8 @@ import YesNoDialog from '@/components/YesNoDialog.vue';
 import ObjectRefsDialog from '@/components/ObjectRefsDialog.vue';
 
 import { getErrorMessage } from '@/lib/error';
+import { USER_PERMISSIONS } from '@/lib/constants';
+import PermissionsCheck from '@/components/PermissionsCheck';
 
 export default {
   components: {
@@ -13,14 +15,23 @@ export default {
     ObjectRefsDialog,
   },
 
+  mixins: [PermissionsCheck],
+
   props: {
     projectId: Number,
+    projectType: String,
     userId: Number,
+    userRole: String,
+    user: Object,
   },
 
   data() {
+    const allowActions = this.allowActions();
+
+    const headers = this.getHeaders().filter((header) => allowActions || header.value !== 'actions');
+
     return {
-      headers: this.getHeaders(),
+      headers,
       items: null,
 
       itemId: null,
@@ -29,6 +40,8 @@ export default {
 
       itemRefs: null,
       itemRefsDialog: null,
+
+      USER_PERMISSIONS,
     };
   },
 
@@ -38,6 +51,10 @@ export default {
   },
 
   methods: {
+    allowActions() {
+      return this.can(USER_PERMISSIONS.manageProjectResources);
+    },
+
     // eslint-disable-next-line no-empty-function
     async beforeLoadItems() {
     },

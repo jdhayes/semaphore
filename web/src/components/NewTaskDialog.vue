@@ -1,8 +1,8 @@
 <template>
   <EditDialog
     v-model="dialog"
-    :save-button-text="TEMPLATE_TYPE_ACTION_TITLES[templateType]"
-    title="New Task"
+    :save-button-text="$t(TEMPLATE_TYPE_ACTION_TITLES[templateType])"
+    :title="$t('newTask')"
     @save="closeDialog"
     @close="closeDialog"
   >
@@ -10,11 +10,22 @@
       <v-icon small class="mr-4">{{ TEMPLATE_TYPE_ICONS[templateType] }}</v-icon>
       <span class="breadcrumbs__item">{{ templateAlias }}</span>
       <v-icon>mdi-chevron-right</v-icon>
-      <span class="breadcrumbs__item">New Task</span>
+      <span class="breadcrumbs__item">{{ $t('newTask') }}</span>
     </template>
 
     <template v-slot:form="{ onSave, onError, needSave, needReset }">
       <TaskForm
+        v-if="['terraform', 'tofu'].includes(templateApp)"
+        :project-id="projectId"
+        item-id="new"
+        :template-id="templateId"
+        @save="onSave"
+        @error="onError"
+        :need-save="needSave"
+        :need-reset="needReset"
+      />
+      <TaskForm
+        v-else
         :project-id="projectId"
         item-id="new"
         :template-id="templateId"
@@ -41,9 +52,10 @@ export default {
   props: {
     value: Boolean,
     projectId: Number,
-    templateId: Number,
+    templateId: [Number, String],
     templateType: String,
     templateAlias: String,
+    templateApp: String,
   },
   data() {
     return {

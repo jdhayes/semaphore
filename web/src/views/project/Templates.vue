@@ -14,7 +14,7 @@
     >
       <v-card>
         <v-card-title>
-          Edit Views
+          {{ $t('editViews') }}
           <v-spacer></v-spacer>
           <v-btn icon @click="closeEditViewDialog()">
             <v-icon>mdi-close</v-icon>
@@ -26,24 +26,13 @@
       </v-card>
     </v-dialog>
 
-    <EditDialog
-      :max-width="700"
-      v-model="editDialog"
-      save-button-text="Create"
-      title="New template"
-      @save="loadItems()"
-    >
-      <template v-slot:form="{ onSave, onError, needSave, needReset }">
-        <TemplateForm
-          :project-id="projectId"
-          item-id="new"
-          @save="onSave"
-          @error="onError"
-          :need-save="needSave"
-          :need-reset="needReset"
-        />
-      </template>
-    </EditDialog>
+    <EditTemplateDialog
+        v-model="editDialog"
+        :project-id="projectId"
+        :item-app="itemApp"
+        item-id="new"
+        @save="loadItems()"
+    ></EditTemplateDialog>
 
     <NewTaskDialog
       v-model="newTaskDialog"
@@ -53,33 +42,64 @@
       :template-id="itemId"
       :template-alias="templateAlias"
       :template-type="templateType"
+      :template-app="templateApp"
     />
 
     <v-toolbar flat>
       <v-app-bar-nav-icon @click="showDrawer()"></v-app-bar-nav-icon>
       <v-toolbar-title>
-        Task Templates
-        <!--
-        <v-btn-toggle class="ml-4" rounded>
-          <v-btn small>
-            <v-icon left>mdi-table</v-icon>
-            <span class="hidden-sm-and-down">Table</span>
-          </v-btn>
-
-          <v-btn small>
-            <v-icon left>mdi-pipe</v-icon>
-            <span class="hidden-sm-and-down">Pipelines</span>
-          </v-btn>
-        </v-btn-toggle>
-        -->
+        {{ $t('taskTemplates2') }}
       </v-toolbar-title>
       <v-spacer></v-spacer>
-      <v-btn
-        color="primary"
-        @click="editItem('new')"
-        class="mr-1"
-      >New template
-      </v-btn>
+
+      <v-menu
+        offset-y
+      >
+        <template v-slot:activator="{ on, attrs }">
+          <v-btn
+            v-bind="attrs"
+            v-on="on"
+            color="primary"
+            class="mr-1 pr-2"
+            v-if="can(USER_PERMISSIONS.manageProjectResources)"
+            :disabled="!isAdmin && appsMixin.activeAppIds.length === 0"
+          >
+            {{ $t('newTemplate') }}
+            <v-icon>mdi-chevron-down</v-icon>
+          </v-btn>
+        </template>
+        <v-list>
+          <v-list-item
+            v-for="appID in appsMixin.activeAppIds"
+            :key="appID"
+            link
+            @click="editItem('new'); itemApp = appID;"
+          >
+            <v-list-item-icon>
+              <v-icon
+                :color="getAppColor(appID)"
+              >
+                {{ getAppIcon(appID) }}
+              </v-icon>
+            </v-list-item-icon>
+            <v-list-item-title>{{ getAppTitle(appID) }}</v-list-item-title>
+          </v-list-item>
+
+          <v-divider v-if="isAdmin && appsMixin.activeAppIds.length > 0"/>
+
+          <v-list-item
+              v-if="isAdmin"
+              key="other"
+              link
+              href="/apps"
+          >
+            <v-list-item-icon>
+              <v-icon>mdi-cogs</v-icon>
+            </v-list-item-icon>
+            <v-list-item-title>Applications</v-list-item-title>
+          </v-list-item>
+        </v-list>
+      </v-menu>
 
       <v-btn icon @click="settingsSheet = true">
         <v-icon>mdi-cog</v-icon>
@@ -87,7 +107,7 @@
     </v-toolbar>
 
     <v-tabs show-arrows class="pl-4" v-model="viewTab">
-      <v-tab :to="getViewUrl(null)" :disabled="viewItemsLoading">All</v-tab>
+      <v-tab :to="getViewUrl(null)" :disabled="viewItemsLoading">{{ $t('all') }}</v-tab>
 
       <v-tab
         v-for="(view) in views"
@@ -97,7 +117,12 @@
       >{{ view.title }}
       </v-tab>
 
-      <v-btn icon class="mt-2 ml-4" @click="editViewsDialog = true">
+      <v-btn
+        icon
+        class="mt-2 ml-4"
+        @click="editViewsDialog = true"
+        v-if="can(USER_PERMISSIONS.manageProjectResources)"
+      >
         <v-icon>mdi-pencil</v-icon>
       </v-btn>
     </v-tabs>
@@ -116,9 +141,17 @@
         }"
     >
       <template v-slot:item.name="{ item }">
+        <v-icon
+          class="mr-3"
+          small
+        >
+          {{ getAppIcon(item.app) }}
+        </v-icon>
+
         <v-icon class="mr-3" small>
           {{ TEMPLATE_TYPE_ICONS[item.type] }}
         </v-icon>
+
         <router-link
           :to="viewId
               ? `/project/${projectId}/views/${viewId}/templates/${item.id}`
@@ -152,7 +185,7 @@
         <div class="mt-2 mb-2 d-flex" v-if="item.last_task != null">
           <TaskStatus :status="item.last_task.status"/>
         </div>
-        <div v-else class="mt-3 mb-2 d-flex" style="color: gray;">Not launched</div>
+        <div v-else class="mt-3 mb-2 d-flex" style="color: gray;">{{ $t('notLaunched') }}</div>
       </template>
 
       <template v-slot:item.last_task="{ item }">
@@ -163,17 +196,17 @@
             :tooltip="item.last_task.message"
           />
           <div style="color: gray; font-size: 14px;">
-            by {{ item.last_task.user_name }} {{ item.last_task.created|formatDate }}
+            {{ $t('by', {user_name: item.last_task.user_name }) }}
           </div>
         </div>
       </template>
 
       <template v-slot:item.inventory_id="{ item }">
-        {{ inventory.find((x) => x.id === item.inventory_id).name }}
+        {{ (inventory.find((x) => x.id === item.inventory_id) || {name: '—'}).name }}
       </template>
 
       <template v-slot:item.environment_id="{ item }">
-        {{ environment.find((x) => x.id === item.environment_id).name }}
+        {{ (environment.find((x) => x.id === item.environment_id) || {name: '—'}).name }}
       </template>
 
       <template v-slot:item.repository_id="{ item }">
@@ -211,7 +244,7 @@
   </div>
 </template>
 <style lang="scss">
-@import '~vuetify/src/styles/settings/_variables';
+@import '~vuetify/src/styles/settings/variables';
 
 .templates-table .text-start:first-child {
   padding-right: 0 !important;
@@ -225,7 +258,6 @@
 </style>
 <script>
 import ItemListPageBase from '@/components/ItemListPageBase';
-import TemplateForm from '@/components/TemplateForm.vue';
 import TaskLink from '@/components/TaskLink.vue';
 import axios from 'axios';
 import EditViewsForm from '@/components/EditViewsForm.vue';
@@ -236,11 +268,16 @@ import TaskStatus from '@/components/TaskStatus.vue';
 import socket from '@/socket';
 import NewTaskDialog from '@/components/NewTaskDialog.vue';
 
-import { TEMPLATE_TYPE_ACTION_TITLES, TEMPLATE_TYPE_ICONS } from '../../lib/constants';
+import {
+  TEMPLATE_TYPE_ACTION_TITLES,
+  TEMPLATE_TYPE_ICONS,
+} from '@/lib/constants';
+import EditTemplateDialog from '@/components/EditTemplateDialog.vue';
+import AppsMixin from '@/components/AppsMixin';
 
 export default {
   components: {
-    TemplateForm,
+    EditTemplateDialog,
     TableSettingsSheet,
     TaskStatus,
     TaskLink,
@@ -248,7 +285,7 @@ export default {
     EditViewsForm,
     NewTaskDialog,
   },
-  mixins: [ItemListPageBase],
+  mixins: [ItemListPageBase, AppsMixin],
   async created() {
     socket.addListener((data) => this.onWebsocketDataReceived(data));
 
@@ -269,6 +306,8 @@ export default {
       editViewsDialog: null,
       viewItemsLoading: null,
       viewTab: null,
+      apps: null,
+      itemApp: '',
     };
   },
   computed: {
@@ -293,12 +332,20 @@ export default {
       return this.items.find((x) => x.id === this.itemId).name;
     },
 
+    templateApp() {
+      if (this.itemId == null || this.itemId === 'new') {
+        return '';
+      }
+      return this.items.find((x) => x.id === this.itemId).app;
+    },
+
     isLoaded() {
       return this.items
         && this.inventory
         && this.environment
         && this.repositories
-        && this.views;
+        && this.views
+        && this.isAppsLoaded;
     },
   },
   watch: {
@@ -319,6 +366,10 @@ export default {
   methods: {
     async beforeLoadItems() {
       await this.loadViews();
+    },
+
+    allowActions() {
+      return true;
     },
 
     getViewUrl(viewId) {
@@ -351,7 +402,7 @@ export default {
         return;
       }
 
-      const template = this.items.find((item) => item.id === data.template_id);
+      const template = (this.items || []).find((item) => item.id === data.template_id);
 
       if (template == null) {
         return;
@@ -386,46 +437,46 @@ export default {
     getHeaders() {
       return [
         {
-          text: 'Name',
+          text: this.$i18n.t('name'),
           value: 'name',
         },
         {
-          text: 'Version',
+          text: this.$i18n.t('version'),
           value: 'version',
           sortable: false,
         },
         {
-          text: 'Status',
+          text: this.$i18n.t('status'),
           value: 'status',
           sortable: false,
         },
         {
-          text: 'Last task',
+          text: this.$i18n.t('lastTask'),
           value: 'last_task',
           sortable: false,
         },
         {
-          text: 'Playbook',
+          text: this.$i18n.t('playbook'),
           value: 'playbook',
           sortable: false,
         },
         {
-          text: 'Inventory',
+          text: this.$i18n.t('inventory'),
           value: 'inventory_id',
           sortable: false,
         },
         {
-          text: 'Environment',
+          text: this.$i18n.t('environment'),
           value: 'environment_id',
           sortable: false,
         },
         {
-          text: 'Repository',
+          text: this.$i18n.t('repository2'),
           value: 'repository_id',
           sortable: false,
         },
         {
-          text: 'Actions',
+          text: this.$i18n.t('actions'),
           value: 'actions',
           sortable: false,
           width: '0%',

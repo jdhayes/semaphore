@@ -1,9 +1,23 @@
 <template>
+  <div v-if="!isLoaded">
+    <v-row>
+      <v-col>
+        <v-skeleton-loader
+            type="table-heading, list-item-two-line, image, table-tfoot"
+        ></v-skeleton-loader>
+      </v-col>
+      <v-col>
+        <v-skeleton-loader
+            type="table-heading, list-item-two-line, image, table-tfoot"
+        ></v-skeleton-loader>
+      </v-col>
+    </v-row>
+  </div>
   <v-form
+    v-else
     ref="form"
     lazy-validation
     v-model="formValid"
-    v-if="isLoaded"
   >
     <v-dialog
       v-model="helpDialog"
@@ -19,34 +33,33 @@
       >
         <div v-if="helpKey === 'build_version'">
           <p>
-            Defines start version of your artifact.
-            Each run increments the artifact version.
+            {{ $t('definesStartVersionOfYourArtifactEachRunIncrements') }}
           </p>
           <p>
-            For more information about building, see the
+            {{ $t('forMoreInformationAboutBuildingSeeThe') }}
             <a href="https://docs.ansible-semaphore.com/user-guide/task-templates#build"
                target="_blank"
-            >Task Template reference</a>.
+            >{{ $t('taskTemplateReference') }}</a>.
           </p>
         </div>
         <div v-else-if="helpKey === 'build'">
           <p>
-            Defines what artifact should be deployed when the task run.
+            {{ $t('definesWhatArtifactShouldBeDeployedWhenTheTaskRun') }}
           </p>
           <p>
-            For more information about deploying, see the
+            {{ $t('forMoreInformationAboutDeployingSeeThe') }}
             <a href="https://docs.ansible-semaphore.com/user-guide/task-templates#build"
                target="_blank"
-            >Task Template reference</a>.
+            >{{ $t('taskTemplateReference2') }}</a>.
           </p>
         </div>
         <div v-if="helpKey === 'cron'">
-          <p>Defines autorun schedule.</p>
+          <p>{{ $t('definesAutorunSchedule') }}</p>
           <p>
-            For more information about cron, see the
-            <a href="https://pkg.go.dev/github.com/robfig/cron#hdr-CRON_Expression_Format"
+            {{ $t('forMoreInformationAboutCronSeeThe') }}
+            <a href="https://pkg.go.dev/github.com/robfig/cron/v3#hdr-CRON_Expression_Format"
                target="_blank"
-            >Cron expression format reference</a>.
+            >{{ $t('cronExpressionFormatReference') }}</a>.
           </p>
         </div>
       </v-alert>
@@ -72,7 +85,7 @@
               :key="key"
             >
               <v-icon small class="mr-2">{{ TEMPLATE_TYPE_ICONS[key] }}</v-icon>
-              {{ TEMPLATE_TYPE_TITLES[key] }}
+              {{ $t(TEMPLATE_TYPE_TITLES[key]) }}
             </v-tab>
           </v-tabs>
 
@@ -80,11 +93,11 @@
             <v-text-field
               v-if="item.type === 'build'"
               v-model="item.start_version"
-              label="Start Version"
-              :rules="[v => !!v || 'Start Version is required']"
+              :label="$t('startVersion')"
+              :rules="[v => !!v || $t('start_version_required')]"
               required
               :disabled="formSaving"
-              placeholder="Example: 0.0.0"
+              :placeholder="$t('example000')"
               append-outer-icon="mdi-help-circle"
               @click:append-outer="showHelpDialog('build_version')"
             ></v-text-field>
@@ -92,11 +105,11 @@
             <v-autocomplete
               v-if="item.type === 'deploy'"
               v-model="item.build_template_id"
-              label="Build Template"
+              :label="$t('buildTemplate')"
               :items="buildTemplates"
               item-value="id"
               item-text="name"
-              :rules="[v => !!v || 'Build Template is required']"
+              :rules="[v => !!v || $t('build_template_required')]"
               required
               :disabled="formSaving"
               append-outer-icon="mdi-help-circle"
@@ -106,7 +119,7 @@
             <v-checkbox
               v-if="item.type === 'deploy'"
               class="mt-0"
-              label="Autorun"
+              :label="$t('autorun')"
               v-model="item.autorun"
             />
           </div>
@@ -115,8 +128,8 @@
 
         <v-text-field
           v-model="item.name"
-          label="Name *"
-          :rules="[v => !!v || 'Name is required']"
+          :label="$t('name2')"
+          :rules="[v => !!v || $t('name_required')]"
           outlined
           dense
           required
@@ -125,7 +138,7 @@
 
         <v-textarea
           v-model="item.description"
-          label="Description"
+          :label="$t('description')"
           :disabled="formSaving"
           rows="1"
           :auto-grow="true"
@@ -135,58 +148,61 @@
 
         <v-text-field
           v-model="item.playbook"
-          label="Playbook Filename *"
-          :rules="[v => !!v || 'Playbook Filename is required']"
+          :label="fieldLabel('playbook')"
+          :rules="isFieldRequired('playbook') ? [v => !!v || $t('playbook_filename_required')] : []"
           outlined
           dense
-          required
+          :required="isFieldRequired('playbook')"
           :disabled="formSaving"
-          placeholder="Example: site.yml"
+          :placeholder="$t('exampleSiteyml')"
+          v-if="needField('playbook')"
         ></v-text-field>
 
         <v-select
           v-model="item.inventory_id"
-          label="Inventory *"
+          :label="fieldLabel('inventory')"
           :items="inventory"
           item-value="id"
           item-text="name"
-          :rules="[v => !!v || 'Inventory is required']"
           outlined
           dense
           required
           :disabled="formSaving"
+          v-if="needField('inventory')"
         ></v-select>
 
         <v-select
           v-model="item.repository_id"
-          label="Repository *"
+          :label="fieldLabel('repository') + ' *'"
           :items="repositories"
           item-value="id"
           item-text="name"
-          :rules="[v => !!v || 'Repository is required']"
+          :rules="isFieldRequired('repository') ? [v => !!v || $t('repository_required')] : []"
           outlined
           dense
-          required
+          :required="isFieldRequired('repository')"
           :disabled="formSaving"
+          v-if="needField('repository')"
         ></v-select>
 
         <v-select
           v-model="item.environment_id"
-          label="Environment *"
+          :label="fieldLabel('environment')"
           :items="environment"
           item-value="id"
           item-text="name"
-          :rules="[v => !!v || 'Environment is required']"
+          :rules="isFieldRequired('environment') ? [v => !!v || $t('environment_required')] : []"
           outlined
           dense
-          required
+          :required="isFieldRequired('environment')"
           :disabled="formSaving"
+          v-if="needField('environment')"
         ></v-select>
 
         <v-select
-          v-if="itemTypeIndex === 0"
+          v-if="itemTypeIndex === 0 && needField('vault')"
           v-model="item.vault_key_id"
-          label="Vault Password"
+          :label="fieldLabel('vault')"
           clearable
           :items="loginPasswordKeys"
           item-value="id"
@@ -200,9 +216,9 @@
       <v-col cols="12" md="6" class="pb-0">
 
         <v-select
-          v-if="itemTypeIndex > 0"
+          v-if="itemTypeIndex > 0 && needField('vault')"
           v-model="item.vault_key_id"
-          label="Vault Password"
+          :label="fieldLabel('vault')"
           clearable
           :items="loginPasswordKeys"
           item-value="id"
@@ -216,7 +232,7 @@
 
         <v-select
           v-model="item.view_id"
-          label="View"
+          :label="$t('view')"
           clearable
           :items="views"
           item-value="id"
@@ -226,90 +242,54 @@
           dense
         ></v-select>
 
-        <v-row>
-          <v-col cols="5" class="pr-1">
-            <v-text-field
-              style="font-size: 14px"
-              v-model="cronFormat"
-              label="Cron"
-              :disabled="formSaving"
-              placeholder="* * * * *"
-              v-if="schedules == null || schedules.length <= 1"
-              outlined
-              dense
-              hide-details
-            ></v-text-field>
-          </v-col>
+        <v-checkbox
+          class="mt-0"
+          :label="$t('iWantToRunATaskByTheCronOnlyForForNewCommitsOfSome')"
+          v-model="cronVisible"
+        />
 
-          <v-col cols="7">
-            <a
-              v-if="!cronRepositoryIdVisible && cronRepositoryId == null"
-              @click="cronRepositoryIdVisible = true"
-              class="text-caption d-block"
-              style="line-height: 1.1;"
-            >
-              I want to run a task by the cron only for for new commits of some repository
-            </a>
+        <v-select
+          v-if="cronVisible"
+          v-model="cronRepositoryId"
+          :label="$t('repository2')"
+          :placeholder="$t('cronChecksNewCommitBeforeRun')"
+          :rules="[v => !!v || $t('repository_required')]"
+          :items="repositories"
+          item-value="id"
+          item-text="name"
+          clearable
+          :disabled="formSaving"
+          outlined
+          dense
+        ></v-select>
 
-            <v-select
-              style="font-size: 14px"
-              v-if="cronRepositoryIdVisible || cronRepositoryId != null"
-              v-model="cronRepositoryId"
-              label="Repository"
-              placeholder="Cron checks new commit before run"
-              :items="repositories"
-              item-value="id"
-              item-text="name"
-              clearable
-              :disabled="formSaving"
-              outlined
-              dense
-              hide-details
-            ></v-select>
-
-          </v-col>
-        </v-row>
-
-        <small class="mt-1 mb-4 d-block">
-          Read the
-          <a target="_blank" href="https://pkg.go.dev/github.com/robfig/cron#hdr-CRON_Expression_Format">docs</a>
-          to learn more about Cron.
-        </small>
+        <v-select
+          v-if="cronVisible"
+          v-model="cronFormat"
+          :label="$t('Check interval')"
+          :hint="$t('New commit check interval')"
+          item-value="cron"
+          item-text="title"
+          :items="cronFormats"
+          :disabled="formSaving"
+          outlined
+          dense
+        />
 
         <v-checkbox
           class="mt-0"
-          label="Suppress success alerts"
+          :label="$t('suppressSuccessAlerts')"
           v-model="item.suppress_success_alerts"
         />
 
-<!--        <a @click="advancedOptions = true" v-if="!advancedOptions">-->
-<!--          Advanced-->
-<!--          <v-icon style="transform: translateY(-1px)">mdi-chevron-right</v-icon>-->
-<!--        </a>-->
-
-<!--        <div v-if="advancedOptions" class="mb-3">-->
-<!--          <a @click="advancedOptions = false">-->
-<!--            Hide-->
-<!--            <v-icon style="transform: translateY(-1px)">mdi-chevron-up</v-icon>-->
-<!--          </a>-->
-<!--        </div>-->
-
-        <codemirror
-          :style="{ border: '1px solid lightgray' }"
-          v-model="item.arguments"
-          :options="cmOptions"
-          :disabled="formSaving"
-          placeholder='CLI Args (JSON array). Example:
-[
-  "-i",
-  "@myinventory.sh",
-  "--private-key=/there/id_rsa",
-  "-vvvv"
-]'
+        <ArgsPicker
+          :vars="args"
+          @change="setArgs"
         />
 
         <v-checkbox
-          label="Allow CLI args in Task"
+          class="mt-0"
+          :label="$t('allowCliArgsInTask')"
           v-model="item.allow_override_args_in_task"
         />
 
@@ -327,12 +307,12 @@
 
 import axios from 'axios';
 
-import { codemirror } from 'vue-codemirror';
 import ItemFormBase from '@/components/ItemFormBase';
 import 'codemirror/lib/codemirror.css';
 import 'codemirror/mode/vue/vue.js';
 import 'codemirror/addon/lint/json-lint.js';
 import 'codemirror/addon/display/placeholder.js';
+import ArgsPicker from '@/components/ArgsPicker.vue';
 import { TEMPLATE_TYPE_ICONS, TEMPLATE_TYPE_TITLES } from '../lib/constants';
 import SurveyVars from './SurveyVars';
 
@@ -340,16 +320,34 @@ export default {
   mixins: [ItemFormBase],
 
   components: {
+    ArgsPicker,
     SurveyVars,
-    codemirror,
   },
 
   props: {
     sourceItemId: Number,
+    fields: Object,
+    app: String,
   },
 
   data() {
     return {
+      cronFormats: [{
+        cron: '* * * * *',
+        title: '1 minute',
+      }, {
+        cron: '*/5 * * * *',
+        title: '5 minutes',
+      }, {
+        cron: '*/10 * * * *',
+        title: '10 minutes',
+      }, {
+        cron: '@hourly',
+        title: '1 hour',
+      }, {
+        cron: '@daily',
+        title: '24 hours',
+      }],
       itemTypeIndex: 0,
       TEMPLATE_TYPE_ICONS,
       TEMPLATE_TYPE_TITLES,
@@ -369,14 +367,15 @@ export default {
       views: null,
       schedules: null,
       buildTemplates: null,
-      cronFormat: null,
+      cronFormat: '* * * * *',
       cronRepositoryId: null,
-      cronRepositoryIdVisible: false,
+      cronVisible: false,
 
       helpDialog: null,
       helpKey: null,
 
       advancedOptions: false,
+      args: [],
     };
   },
 
@@ -422,6 +421,22 @@ export default {
   },
 
   methods: {
+    setArgs(args) {
+      this.args = args;
+    },
+
+    fieldLabel(f) {
+      return this.$t((this.fields[f] || { label: f }).label);
+    },
+
+    needField(f) {
+      return this.fields[f] != null;
+    },
+
+    isFieldRequired(f) {
+      return this.fields[f] != null && !this.fields[f].optional;
+    },
+
     setSurveyVars(v) {
       this.item.survey_vars = v;
     },
@@ -438,6 +453,7 @@ export default {
           url: `/api/project/${this.projectId}/templates/${this.sourceItemId}`,
           responseType: 'json',
         })).data;
+        this.item.id = null;
       }
 
       this.advancedOptions = this.item.arguments != null || this.item.allow_override_args_in_task;
@@ -490,6 +506,8 @@ export default {
           default:
             break;
         }
+
+        this.args = JSON.parse(this.item.arguments || '[]');
       });
 
       this.buildTemplates = builds;
@@ -510,9 +528,13 @@ export default {
         responseType: 'json',
       })).data;
 
-      if (this.schedules.length === 1) {
-        this.cronFormat = this.schedules[0].cron_format;
-        this.cronRepositoryId = this.schedules[0].repository_id;
+      if (this.schedules.length > 0) {
+        const schedule = this.schedules.find((s) => s.repository_id != null);
+        if (schedule != null) {
+          this.cronFormat = schedule.cron_format;
+          this.cronRepositoryId = schedule.repository_id;
+          this.cronVisible = this.cronRepositoryId != null;
+        }
       }
 
       this.itemTypeIndex = Object.keys(TEMPLATE_TYPE_ICONS).indexOf(this.item.type);
@@ -539,11 +561,15 @@ export default {
           cron_format: this.cronFormat,
         },
       });
+
+      this.item.app = this.app;
+
+      this.item.arguments = JSON.stringify(this.args);
     },
 
     async afterSave(newItem) {
       if (newItem || this.schedules.length === 0) {
-        if (this.cronFormat != null && this.cronFormat !== '') {
+        if (this.cronFormat != null && this.cronFormat !== '' && this.cronVisible) {
           // new schedule
           await axios({
             method: 'post',
@@ -554,12 +580,13 @@ export default {
               template_id: newItem ? newItem.id : this.itemId,
               cron_format: this.cronFormat,
               repository_id: this.cronRepositoryId,
+              active: true,
             },
           });
         }
       } else if (this.schedules.length > 1) {
         // do nothing
-      } else if (this.cronFormat == null || this.cronFormat === '') {
+      } else if (this.cronFormat == null || this.cronFormat === '' || !this.cronVisible) {
         // drop schedule
         await axios({
           method: 'delete',

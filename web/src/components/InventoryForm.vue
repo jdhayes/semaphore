@@ -13,26 +13,26 @@
 
     <v-text-field
       v-model="item.name"
-      label="Name"
-      :rules="[v => !!v || 'Name is required']"
+      :label="$t('name')"
+      :rules="[v => !!v || $t('name_required')]"
       required
       :disabled="formSaving"
     ></v-text-field>
 
     <v-select
       v-model="item.ssh_key_id"
-      label="User Credentials"
+      :label="$t('userCredentials')"
       :items="keys"
       item-value="id"
       item-text="name"
-      :rules="[v => !!v || 'User Credentials is required']"
+      :rules="[v => !!v || $t('user_credentials_required')]"
       required
       :disabled="formSaving"
     ></v-select>
 
     <v-select
         v-model="item.become_key_id"
-        label="Sudo Credentials (Optional)"
+        :label="$t('sudoCredentialsOptional')"
         clearable
         :items="loginPasswordKeys"
         item-value="id"
@@ -42,8 +42,8 @@
 
     <v-select
       v-model="item.type"
-      label="Type"
-      :rules="[v => !!v || 'Type is required']"
+      :label="$t('type')"
+      :rules="[v => !!v || $t('type_required')]"
       :items="inventoryTypes"
       item-value="id"
       item-text="name"
@@ -52,20 +52,31 @@
     ></v-select>
 
     <v-text-field
-      v-model="item.inventory"
-      label="Path to Inventory file"
-      :rules="[v => !!v || 'Path to Inventory file is required']"
+      v-model.trim="item.inventory"
+      :label="$t('pathToInventoryFile')"
+      :rules="[v => !!v || $t('path_required')]"
       required
       :disabled="formSaving"
       v-if="item.type === 'file'"
     ></v-text-field>
 
+    <v-select
+      v-model="item.repository_id"
+      :label="$t('repository') + ' (Optional)'"
+      clearable
+      :items="repositories"
+      item-value="id"
+      item-text="name"
+      :disabled="formSaving"
+      v-if="item.type === 'file'"
+    ></v-select>
+
     <codemirror
         :style="{ border: '1px solid lightgray' }"
-        v-model="item.inventory"
+        v-model.trim="item.inventory"
         :options="cmOptions"
         v-if="item.type === 'static' || item.type === 'static-yaml'"
-        placeholder="Enter inventory..."
+        :placeholder="$t('enterInventory')"
     />
 
     <v-alert
@@ -75,7 +86,7 @@
         type="info"
         v-if="item.type === 'static'"
     >
-      Static inventory example:
+      {{ $t('staticInventoryExample') }}
       <pre style="font-size: 14px;">[website]
 172.18.8.40
 172.18.8.41</pre>
@@ -88,7 +99,7 @@
         type="info"
         v-if="item.type === 'static-yaml'"
     >
-      Static YAML inventory example:
+      {{ $t('staticYamlInventoryExample') }}
       <pre style="font-size: 14px;">all:
   children:
     website:
@@ -131,7 +142,6 @@ export default {
         lint: true,
         indentWithTabs: false,
       },
-      keys: null,
       inventoryTypes: [{
         id: 'static',
         name: 'Static',
@@ -142,6 +152,8 @@ export default {
         id: 'file',
         name: 'File',
       }],
+      keys: null,
+      repositories: null,
     };
   },
 
@@ -155,11 +167,18 @@ export default {
   },
 
   async created() {
-    this.keys = (await axios({
-      keys: 'get',
-      url: `/api/project/${this.projectId}/keys`,
-      responseType: 'json',
-    })).data;
+    [this.keys, this.repositories] = (await Promise.all([
+      await axios({
+        keys: 'get',
+        url: `/api/project/${this.projectId}/keys`,
+        responseType: 'json',
+      }),
+      await axios({
+        keys: 'get',
+        url: `/api/project/${this.projectId}/repositories`,
+        responseType: 'json',
+      }),
+    ])).map((x) => x.data);
   },
 
   methods: {
