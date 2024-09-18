@@ -47,9 +47,11 @@ jobs:
         run: |
           git reset --hard
 
-      - name: Run release
-        run: |
-          GITHUB_TOKEN=${{ secrets.GH_TOKEN }} task release:prod
+      # Auto create release would require proper github access.
+      # If we want to use this, then I need to create a new token.
+      #- name: Run release
+      #  run: |
+      #    GITHUB_TOKEN=${{ secrets.GH_TOKEN }} task release:prod
 
   deploy-beta:
     runs-on: ubuntu-latest
@@ -80,13 +82,13 @@ jobs:
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           images: |
-            semaphoreui/semaphore
+            ggtvg00/semaphore
+            #semaphoreui/semaphore
           labels: |
             org.opencontainers.image.vendor=SemaphoreUI
             maintainer=Semaphore UI <support@semui.co>
-          tags: ${{ secrets.DOCKER_USER }}/semaphore:latest,${{ secrets.DOCKER_USER }}/semaphore:${{ github.ref_name }}
-          #tags: |
-          #  type=raw,value=${{ github.ref_name }}
+          tags: |
+            type=raw,value=${{ github.ref_name }}
           flavor: |
             latest=false
 
@@ -107,7 +109,8 @@ jobs:
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           images: |
-            semaphoreui/runner
+            #semaphoreui/runner
+            ggtvg00/semaphore_runner
           labels: |
             org.opencontainers.image.vendor=SemaphoreUI
             maintainer=Semaphore UI <support@semui.co>
