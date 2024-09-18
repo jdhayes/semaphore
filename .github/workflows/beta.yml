@@ -84,8 +84,9 @@ jobs:
           labels: |
             org.opencontainers.image.vendor=SemaphoreUI
             maintainer=Semaphore UI <support@semui.co>
-          tags: |
-            type=raw,value=${{ github.ref_name }}
+          tags: ${{ secrets.DOCKER_USER }}/semaphore:latest,${{ secrets.DOCKER_USER }}/semaphore:${{ github.ref_name }}
+          #tags: |
+          #  type=raw,value=${{ github.ref_name }}
           flavor: |
             latest=false
 
