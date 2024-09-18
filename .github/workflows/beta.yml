@@ -53,7 +53,7 @@ jobs:
 
   deploy-beta:
     runs-on: ubuntu-latest
-    if: github.repository_owner == 'semaphoreui'
+    #if: github.repository_owner == 'semaphoreui'
 
     steps:
       - name: Checkout source
